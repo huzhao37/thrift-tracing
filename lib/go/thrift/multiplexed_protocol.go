@@ -22,7 +22,7 @@ package thrift
 import (
 	"context"
 	"fmt"
-	metadata2 "github.com/apache/thrift/lib/go/thrift/metadata2"
+	"gitee.com/gbat/thrift/lib/go/thrift/metadata2"
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
 	"strings"
@@ -217,7 +217,7 @@ func serverInterceptor(ctx context.Context, req interface{}, info string) (paren
 		return ctx, resp, err
 	} else {
 		span := tracer.StartSpan(
-			"info.FullMethod",
+			info,
 			ext.RPCServerOption(spanContext),
 			opentracing.Tag{Key: string(ext.Component), Value: "thrift"},
 			ext.SpanKindRPCServer,
