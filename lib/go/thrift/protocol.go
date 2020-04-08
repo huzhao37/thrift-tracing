@@ -31,6 +31,8 @@ const (
 )
 
 type TProtocol interface {
+	ReadRichMessageBegin() (name string, typeId TMessageType, seqId int32, c context.Context, err error)
+	WriteRichMessageBegin(name string, typeId TMessageType, seqId int32, c context.Context) error
 	WriteMessageBegin(name string, typeId TMessageType, seqid int32) error
 	WriteMessageEnd() error
 	WriteStructBegin(name string) error

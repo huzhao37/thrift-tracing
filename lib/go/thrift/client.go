@@ -24,7 +24,7 @@ func NewTStandardClient(inputProtocol, outputProtocol TProtocol) *TStandardClien
 }
 
 func (p *TStandardClient) Send(ctx context.Context, oprot TProtocol, seqId int32, method string, args TStruct) error {
-	if err := oprot.WriteMessageBegin(method, CALL, seqId); err != nil {
+	if err := oprot.WriteRichMessageBegin(method, CALL, seqId, ctx); err != nil {
 		return err
 	}
 	if err := args.Write(oprot); err != nil {

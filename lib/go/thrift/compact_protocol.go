@@ -122,6 +122,13 @@ func NewTCompactProtocol(trans TTransport) *TCompactProtocol {
 //
 // Public Writing methods.
 //
+//extend
+func (p *TCompactProtocol) ReadRichMessageBegin() (name string, typeId TMessageType, seqid int32, c context.Context, err error) {
+	return name, typeId, seqid, c, nil
+}
+func (p *TCompactProtocol) WriteRichMessageBegin(name string, typeId TMessageType, seqId int32, c context.Context) error {
+	return nil
+}
 
 // Write a message header to the wire. Compact Protocol messages contain the
 // protocol version so we can migrate forwards in the future if need be.

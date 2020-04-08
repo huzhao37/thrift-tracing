@@ -48,6 +48,13 @@ func (t *TDebugProtocolFactory) GetProtocol(trans TTransport) TProtocol {
 	}
 }
 
+//extend
+func (p *TDebugProtocol) ReadRichMessageBegin() (name string, typeId TMessageType, seqid int32, c context.Context, err error) {
+	return name, typeId, seqid, c, nil
+}
+func (p *TDebugProtocol) WriteRichMessageBegin(name string, typeId TMessageType, seqId int32, c context.Context) error {
+	return nil
+}
 func (tdp *TDebugProtocol) WriteMessageBegin(name string, typeId TMessageType, seqid int32) error {
 	err := tdp.Delegate.WriteMessageBegin(name, typeId, seqid)
 	log.Printf("%sWriteMessageBegin(name=%#v, typeId=%#v, seqid=%#v) => %#v", tdp.LogPrefix, name, typeId, seqid, err)

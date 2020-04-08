@@ -23,10 +23,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/gob"
 	"errors"
 	"fmt"
+	"gitee.com/gbat/thrift/lib/go/thrift/metadata2"
 	"io"
+	"log"
 	"math"
+	"time"
 )
 
 type TBinaryProtocol struct {
@@ -75,6 +79,49 @@ func (p *TBinaryProtocolFactory) GetProtocol(t TTransport) TProtocol {
 /**
  * Writing Methods
  */
+func (p *TBinaryProtocol) WriteRichMessageBegin(name string, typeId TMessageType, seqId int32, c context.Context) error {
+	if p.strictWrite {
+		version := uint32(VERSION_1) | uint32(typeId)
+		e := p.WriteI32(int32(version))
+		if e != nil {
+			return e
+		}
+		e = p.WriteString(name)
+		if e != nil {
+			return e
+		}
+		e = p.WriteI32(seqId)
+		//add context
+		if e != nil {
+			return e
+		}
+		var buf bytes.Buffer
+		enc := gob.NewEncoder(&buf)
+		md, ok := metadata2.FromOutgoingContext(c)
+		if !ok {
+			md = metadata2.New(nil)
+		} else {
+			md = md.Copy()
+		}
+		if err := enc.Encode(md); err != nil {
+			log.Fatal("encode error:", err)
+		}
+		e = p.WriteBinary(buf.Bytes())
+		return e
+	} else {
+		e := p.WriteString(name)
+		if e != nil {
+			return e
+		}
+		e = p.WriteByte(int8(typeId))
+		if e != nil {
+			return e
+		}
+		e = p.WriteI32(seqId)
+		return e
+	}
+	return nil
+}
 
 func (p *TBinaryProtocol) WriteMessageBegin(name string, typeId TMessageType, seqId int32) error {
 	if p.strictWrite {
@@ -236,6 +283,81 @@ func (p *TBinaryProtocol) WriteBinary(value []byte) error {
  * Reading methods
  */
 
+func (p *TBinaryProtocol) ReadRichMessageBegin() (name string, typeId TMessageType, seqId int32, c context.Context, err error) {
+	size, e := p.ReadI32()
+	if e != nil {
+		return "", typeId, 0, nil, NewTProtocolException(e)
+	}
+	if size < 0 {
+		typeId = TMessageType(size & 0x0ff)
+		version := int64(int64(size) & VERSION_MASK)
+		if version != VERSION_1 {
+			return name, typeId, seqId, nil, NewTProtocolExceptionWithType(BAD_VERSION, fmt.Errorf("Bad version in ReadMessageBegin"))
+		}
+		name, e = p.ReadString()
+		if e != nil {
+			return name, typeId, seqId, nil, NewTProtocolException(e)
+		}
+		seqId, e = p.ReadI32()
+		if e != nil {
+			return name, typeId, seqId, nil, NewTProtocolException(e)
+		}
+
+		var buf bytes.Buffer
+		var md metadata2.MD
+		b, e := p.ReadBinary()
+		if e != nil {
+			return name, typeId, seqId, nil, NewTProtocolException(e)
+		}
+		_, e = buf.Write(b)
+		if e != nil {
+			return name, typeId, seqId, nil, NewTProtocolException(e)
+		}
+		dec := gob.NewDecoder(&buf)
+		if err := dec.Decode(&md); err != nil {
+			log.Fatal("decode error:", err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*500) //500
+		defer cancel()
+		c = metadata2.NewOutgoingContext(ctx, md)
+		return name, typeId, seqId, c, nil
+	}
+	if p.strictRead {
+		return name, typeId, seqId, nil, NewTProtocolExceptionWithType(BAD_VERSION, fmt.Errorf("Missing version in ReadMessageBegin"))
+	}
+	name, e2 := p.readStringBody(size)
+	if e2 != nil {
+		return name, typeId, seqId, nil, e2
+	}
+	b, e3 := p.ReadByte()
+	if e3 != nil {
+		return name, typeId, seqId, nil, e3
+	}
+	typeId = TMessageType(b)
+	seqId, e4 := p.ReadI32()
+	if e4 != nil {
+		return name, typeId, seqId, nil, e4
+	}
+
+	var buf bytes.Buffer
+	var md metadata2.MD
+	by, e5 := p.ReadBinary()
+	if e5 != nil {
+		return name, typeId, seqId, nil, e5
+	}
+	_, e5 = buf.Write(by)
+	if e5 != nil {
+		return name, typeId, seqId, nil, e5
+	}
+	dec := gob.NewDecoder(&buf)
+	if err := dec.Decode(&md); err != nil {
+		log.Fatal("decode error:", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*500) //500
+	defer cancel()
+	c = metadata2.NewOutgoingContext(ctx, md)
+	return name, typeId, seqId, c, nil
+}
 func (p *TBinaryProtocol) ReadMessageBegin() (name string, typeId TMessageType, seqId int32, err error) {
 	size, e := p.ReadI32()
 	if e != nil {

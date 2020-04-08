@@ -57,6 +57,13 @@ func NewTJSONProtocolFactory() *TJSONProtocolFactory {
 	return &TJSONProtocolFactory{}
 }
 
+//extend
+func (p *TJSONProtocol) ReadRichMessageBegin() (name string, typeId TMessageType, seqid int32, c context.Context, err error) {
+	return name, typeId, seqid, c, nil
+}
+func (p *TJSONProtocol) WriteRichMessageBegin(name string, typeId TMessageType, seqId int32, c context.Context) error {
+	return nil
+}
 func (p *TJSONProtocol) WriteMessageBegin(name string, typeId TMessageType, seqId int32) error {
 	p.resetContextStack() // THRIFT-3735
 	if e := p.OutputListBegin(); e != nil {

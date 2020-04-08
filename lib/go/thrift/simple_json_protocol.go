@@ -156,6 +156,13 @@ func mismatch(expected, actual string) error {
 	return fmt.Errorf("Expected '%s' but found '%s' while parsing JSON.", expected, actual)
 }
 
+//extend
+func (p *TSimpleJSONProtocol) ReadRichMessageBegin() (name string, typeId TMessageType, seqid int32, c context.Context, err error) {
+	return name, typeId, seqid, c, nil
+}
+func (p *TSimpleJSONProtocol) WriteRichMessageBegin(name string, typeId TMessageType, seqId int32, c context.Context) error {
+	return nil
+}
 func (p *TSimpleJSONProtocol) WriteMessageBegin(name string, typeId TMessageType, seqId int32) error {
 	p.resetContextStack() // THRIFT-3735
 	if e := p.OutputListBegin(); e != nil {

@@ -22,7 +22,7 @@ package thrift
 import (
 	"context"
 	"fmt"
-	"gitee.com/gbat/thrift/lib/go/thrift/metadata2"
+	metadata2 "gitee.com/gbat/thrift/lib/go/thrift/metadata2"
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
 	"strings"
@@ -106,6 +106,13 @@ func (t *TMultiplexedProtocol) WriteMessageBegin(name string, typeId TMessageTyp
 		return t.TProtocol.WriteMessageBegin(name, typeId, seqid)
 	}
 }
+func (t *TMultiplexedProtocol) WriteRichMessageBegin(name string, typeId TMessageType, seqid int32, ctx context.Context) error {
+	if typeId == CALL || typeId == ONEWAY {
+		return t.TProtocol.WriteRichMessageBegin(t.serviceName+MULTIPLEXED_SEPARATOR+name, typeId, seqid, ctx)
+	} else {
+		return t.TProtocol.WriteRichMessageBegin(name, typeId, seqid, ctx)
+	}
+}
 
 /*
 TMultiplexedProcessor is a TProcessor allowing
@@ -161,7 +168,7 @@ func (t *TMultiplexedProcessor) RegisterProcessor(name string, processor TProces
 
 //add trace middleware
 func (t *TMultiplexedProcessor) Process(ctx context.Context, in, out TProtocol) (bool, TException) {
-	name, typeId, seqid, err := in.ReadMessageBegin()
+	name, typeId, seqid, ctx, err := in.ReadRichMessageBegin()
 	if err != nil {
 		return false, err
 	}
@@ -183,7 +190,7 @@ func (t *TMultiplexedProcessor) Process(ctx context.Context, in, out TProtocol) 
 	}
 	smb := NewStoredMessageProtocol(in, v[1], typeId, seqid)
 	fmt.Printf("1\n")
-	parentContext, _, _ := serverInterceptor(ctx, smb, name)
+	parentContext, _, _ := ServerInterceptor(ctx, name)
 	return actualProcessor.Process(parentContext, smb, out)
 }
 
@@ -204,9 +211,9 @@ func (s *storedMessageProtocol) ReadMessageBegin() (name string, typeId TMessage
 }
 
 //opentrace middleware
-func serverInterceptor(ctx context.Context, req interface{}, info string) (parentContext context.Context, resp interface{}, err error) {
+func ServerInterceptor(ctx context.Context, info string) (parentContext context.Context, resp interface{}, err error) {
 	//var parentContext context.Context
-	md, ok := metadata2.FromIncomingContext(ctx)
+	md, ok := metadata2.FromOutgoingContext(ctx)
 	if !ok {
 		md = metadata2.New(nil)
 	}
