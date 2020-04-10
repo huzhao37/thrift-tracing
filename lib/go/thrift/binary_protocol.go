@@ -30,6 +30,7 @@ import (
 	"io"
 	"log"
 	"math"
+	"strings"
 	"time"
 )
 
@@ -86,27 +87,41 @@ func (p *TBinaryProtocol) WriteRichMessageBegin(name string, typeId TMessageType
 		if e != nil {
 			return e
 		}
-		e = p.WriteString(name)
-		if e != nil {
-			return e
-		}
-		e = p.WriteI32(seqId)
-		//add context
-		if e != nil {
-			return e
-		}
-		var buf bytes.Buffer
-		enc := gob.NewEncoder(&buf)
 		md, ok := metadata2.FromOutgoingContext(c)
 		if !ok {
 			md = metadata2.New(nil)
 		} else {
 			md = md.Copy()
 		}
-		if err := enc.Encode(md); err != nil {
-			log.Fatal("encode error:", err)
+		traceStr := ""
+		if traces := md["uber-trace-id"]; traces != nil {
+			traceStr = strings.Join(traces, "|")
 		}
-		e = p.WriteBinary(buf.Bytes())
+		if traceStr != "" {
+			name = name + "@" + traceStr
+		}
+		e = p.WriteString(name)
+		if e != nil {
+			return e
+		}
+		e = p.WriteI32(seqId)
+		//add context
+		//if e != nil {
+		//	return e
+		//}
+		//var buf bytes.Buffer
+		//enc := gob.NewEncoder(&buf)
+		//md, ok := metadata2.FromOutgoingContext(c)
+		//if !ok {
+		//	md = metadata2.New(nil)
+		//} else {
+		//	md = md.Copy()
+		//}
+		//if err := enc.Encode(md); err != nil {
+		//	log.Fatal("encode error:", err)
+		//}
+		//
+		//e=p.WriteBinary(buf.Bytes())
 		return e
 	} else {
 		e := p.WriteString(name)
@@ -295,6 +310,12 @@ func (p *TBinaryProtocol) ReadRichMessageBegin() (name string, typeId TMessageTy
 			return name, typeId, seqId, nil, NewTProtocolExceptionWithType(BAD_VERSION, fmt.Errorf("Bad version in ReadMessageBegin"))
 		}
 		name, e = p.ReadString()
+		nameStr := strings.Split(name, "@")
+		name = nameStr[0]
+		traces := make([]string, 0)
+		if len(nameStr) > 1 {
+			traces = strings.Split(nameStr[1], "|")
+		}
 		if e != nil {
 			return name, typeId, seqId, nil, NewTProtocolException(e)
 		}
@@ -303,19 +324,22 @@ func (p *TBinaryProtocol) ReadRichMessageBegin() (name string, typeId TMessageTy
 			return name, typeId, seqId, nil, NewTProtocolException(e)
 		}
 
-		var buf bytes.Buffer
-		var md metadata2.MD
-		b, e := p.ReadBinary()
-		if e != nil {
-			return name, typeId, seqId, nil, NewTProtocolException(e)
-		}
-		_, e = buf.Write(b)
-		if e != nil {
-			return name, typeId, seqId, nil, NewTProtocolException(e)
-		}
-		dec := gob.NewDecoder(&buf)
-		if err := dec.Decode(&md); err != nil {
-			log.Fatal("decode error:", err)
+		//var buf bytes.Buffer
+		md := metadata2.MD{}
+		//b,e:=p.ReadBinary()
+		//if e != nil {
+		//	return name, typeId, seqId,nil, NewTProtocolException(e)
+		//}
+		//_,e=buf.Write(b)
+		//if e != nil {
+		//	return name, typeId, seqId,nil, NewTProtocolException(e)
+		//}
+		//dec := gob.NewDecoder(&buf)
+		//if err := dec.Decode(&md); err != nil {
+		//	log.Fatal("decode error:", err)
+		//}
+		for i := 0; i < len(traces); i++ {
+			md.Set("uber-trace-id", traces[i])
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*500) //500
 		defer cancel()
