@@ -25,6 +25,7 @@ import (
 	metadata2 "gitee.com/gbat/thrift/lib/go/thrift/metadata2"
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
+	"github.com/opentracing/opentracing-go/log"
 	"strings"
 )
 
@@ -189,9 +190,36 @@ func (t *TMultiplexedProcessor) Process(ctx context.Context, in, out TProtocol) 
 		return false, fmt.Errorf("Service name not found: %s.  Did you forget to call registerProcessor()?", v[0])
 	}
 	smb := NewStoredMessageProtocol(in, v[1], typeId, seqid)
-	fmt.Printf("1\n")
-	parentContext, _, _ := ServerInterceptor(ctx, name)
-	return actualProcessor.Process(parentContext, smb, out)
+	//ServerInterceptor
+	md, ok := metadata2.FromOutgoingContext(ctx)
+	if !ok {
+		md = metadata2.New(nil)
+	}
+	isExp := false
+	var span opentracing.Span
+	spanContext, err := tracer.Extract(opentracing.TextMap, MDReaderWriter{md})
+	if err != nil && err != opentracing.ErrSpanContextNotFound {
+		span.LogFields(
+			log.String(name, fmt.Sprintf("extract from metadata err: %v", err)),
+		)
+		return false, err
+	} else {
+		span = tracer.StartSpan(
+			name,
+			ext.RPCServerOption(spanContext),
+			opentracing.Tag{Key: string(ext.Component), Value: "thrift"},
+			ext.SpanKindRPCServer,
+		)
+		defer span.Finish()
+		parentContext := opentracing.ContextWithSpan(ctx, span)
+		isExp, err = actualProcessor.Process(parentContext, smb, out)
+	}
+	span.LogFields(
+		log.String(name, "finish"),
+	)
+	//time.Sleep(1*time.Millisecond)
+
+	return isExp, err
 }
 
 //Protocol that use stored message for ReadMessageBegin
