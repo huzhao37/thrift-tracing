@@ -36,6 +36,19 @@ func (p *TStandardClient) Send(ctx context.Context, oprot TProtocol, seqId int32
 	return oprot.Flush(ctx)
 }
 
+//No Trace
+func (p *TStandardClient) SendNoTrace(ctx context.Context, oprot TProtocol, seqId int32, method string, args TStruct) error {
+	if err := oprot.WriteMessageBegin(method, CALL, seqId); err != nil {
+		return err
+	}
+	if err := args.Write(oprot); err != nil {
+		return err
+	}
+	if err := oprot.WriteMessageEnd(); err != nil {
+		return err
+	}
+	return oprot.Flush(ctx)
+}
 func (p *TStandardClient) Recv(iprot TProtocol, seqId int32, method string, result TStruct) error {
 	rMethod, rTypeId, rSeqId, err := iprot.ReadMessageBegin()
 	if err != nil {
@@ -73,6 +86,23 @@ func (p *TStandardClient) Call(ctx context.Context, method string, args, result 
 	seqId := p.seqId
 
 	if err := p.Send(ctx, p.oprot, seqId, method, args); err != nil {
+		return err
+	}
+
+	// method is oneway
+	if result == nil {
+		return nil
+	}
+
+	return p.Recv(p.iprot, seqId, method, result)
+}
+
+//Not Trace
+func (p *TStandardClient) CallNoTrace(ctx context.Context, method string, args, result TStruct) error {
+	p.seqId++
+	seqId := p.seqId
+
+	if err := p.SendNoTrace(ctx, p.oprot, seqId, method, args); err != nil {
 		return err
 	}
 
